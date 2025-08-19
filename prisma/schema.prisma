@@ -1,0 +1,106 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["queryCompiler", "driverAdapters"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model users {
+  id            String @id @default(uuid(7))
+  first_name    String
+  last_name     String
+  username      String @unique
+  email         String @unique
+  password_hash String
+
+  //   timestamps
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  //   relations
+  rooms            rooms[]
+  room_members     room_members[]
+  messages         messages[]
+  message_receipts message_receipts[]
+}
+
+model rooms {
+  id          String  @id @default(uuid(7))
+  name        String
+  description String?
+  owner_id    String
+
+  //   timestamps
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  //   relations
+  owner        users          @relation(fields: [owner_id], references: [id])
+  room_members room_members[]
+  messages     messages[]
+}
+
+model room_members {
+  id        String @id @default(uuid(7))
+  member_id String
+  room_id   String
+
+  //   timestamps
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  //   relations
+  member users @relation(fields: [member_id], references: [id])
+  room   rooms @relation(fields: [room_id], references: [id])
+
+  // constraints
+  @@unique([room_id, member_id], name: "unique_member_room")
+}
+
+model messages {
+  id        String @id @default(uuid(7))
+  room_id   String
+  sender_id String
+  content   String
+
+  //   timestamps
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  //   relations
+  room             rooms              @relation(fields: [room_id], references: [id])
+  sender           users              @relation(fields: [sender_id], references: [id])
+  message_receipts message_receipts[]
+}
+
+model message_receipts {
+  id           Int @id @default(autoincrement())
+  message_id   String
+  recipient_id String
+  delivered_at DateTime?
+  read_at      DateTime?
+
+  //   timestamps
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  //   relations
+  message   messages @relation(fields: [message_id], references: [id])
+  recipient users    @relation(fields: [recipient_id], references: [id])
+
+  // constraints
+  @@unique([message_id, recipient_id], name: "unique_receipt_message_user")
+}

@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "es2016",
+    "module": "commonjs",
+    "strict": false,
+    "skipLibCheck": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "./",
+    "outDir": "./dist",
+    "incremental": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": false,
+    "esModuleInterop": true,
+    "moduleResolution": "Node"
+  },
+  "paths": {
+    "@config/*": ["src/config/*"],
+    "@internal/*": ["src/internal/*"],
+    "@app/*": ["src/app/*"]
+  },
+  "typeRoots": ["./node_modules/@types"],
+  "types": ["reflect-metadata", "jest", "node"],
+}

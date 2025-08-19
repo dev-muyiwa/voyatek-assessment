@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  redis_staging:
+    image: redis
+    container_name: redis_staging
+    restart: always
+    ports:
+      - "6378:${REDIS_PORT}"
+    volumes:
+      - redis_staging_data:/data
+    
+    env_file:
+      - .env
+    command: ["redis-server", "--port", "${REDIS_PORT}", "--requirepass", "${REDIS_PASSWORD}"]
+
+  redis_production:
+    image: redis
+    container_name: redis_production
+    restart: always
+    ports:
+      - "6380:${REDIS_PORT}"
+    volumes:
+      - redis_production_data:/data
+    env_file:
+      - .env
+    command: ["redis-server", "--port", "${REDIS_PORT}", "--requirepass", "${REDIS_PASSWORD}"]
+
+volumes:
+  redis_staging_data:
+  redis_production_data:

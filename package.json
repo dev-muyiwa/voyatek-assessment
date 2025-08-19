@@ -1,0 +1,52 @@
+{
+  "name": "voyatek-assessment",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend assessment for Voyatek",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node ./dist",
+    "start:dev": "nodemon src/index.ts",
+    "watch": "tsc --watch -p ./tsconfig.json",
+    "build": "tsc -p ./tsconfig.json",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Moyosoreoluwa Odusola",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/adapter-mariadb": "^6.14.0",
+    "@prisma/client": "^6.14.0",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.31.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "handlebars": "^4.7.8",
+    "helmet": "^8.0.0",
+    "html-pdf": "^3.0.1",
+    "inversify": "^6.1.6",
+    "inversify-express-utils": "^6.4.8",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
+    "nodemailer": "^6.9.16",
+    "reflect-metadata": "^0.2.2",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/lodash": "^4.17.20",
+    "@types/nodemailer": "^6.4.17",
+    "@types/uuid": "^10.0.0",
+    "nodemon": "^3.1.7",
+    "prisma": "^6.14.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}
