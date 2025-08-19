@@ -26,8 +26,8 @@ export class IncompleteEnvError extends Error {
 
 export class BasicConfig {
   @IsString()
-  @IsIn(['/api/v1',], { message: 'Invalid API version' })
-  api_version: string = '/api/v1';
+  @IsIn(['v1',], { message: 'Invalid API version' })
+  api_version: string = 'v1';
 
   @IsString()
   @IsIn(['dev', 'staging'], { message: 'Invalid node environment' })
