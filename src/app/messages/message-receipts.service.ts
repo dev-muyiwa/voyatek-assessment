@@ -3,6 +3,7 @@ import { LIB_TYPES } from '../../di/types';
 import { Database } from '../../config/db';
 import { Logger } from '../../config/logger';
 import { PrismaClient } from '@prisma/client';
+import { BaseService } from '../../internal/base.service';
 
 export interface MessageReceiptInfo {
   messageId: string;
@@ -29,21 +30,19 @@ export interface MessageWithReceipts {
 }
 
 @injectable()
-export class MessageReceiptsService {
+export class MessageReceiptsService extends BaseService {
   private _client: PrismaClient;
 
   constructor(
     @inject(LIB_TYPES.KnexDB) private readonly _db: Database,
     @inject(LIB_TYPES.Logger) private readonly _logger: Logger,
   ) {
+    super(_logger);
     this._client = this._db.connection;
   }
 
-  /**
-   * Create receipts for all room members when a message is sent
-   * delivered_at is handled by DB default; we only populate recipient links
-   */
   async createDeliveryReceipts(messageId: string, roomId: string, senderId: string): Promise<void> {
+    this.action = 'CREATE_MESSAGE_RECEIPTS';
     try {
       // Get all room members except the sender
       const roomMembers = await this._client.room_members.findMany({
@@ -81,24 +80,14 @@ export class MessageReceiptsService {
         skipDuplicates: true,
       });
 
-      this._logger.debug('Created message receipts', { 
-        messageId, 
-        recipientCount: roomMembers.length 
-      });
+      this.logDebug('Created message receipts', { messageId, roomId }, { recipientCount: recipientIds.length });
     } catch (error: any) {
-      this._logger.error('Failed to create message receipts', {
-        error: error.message,
-        messageId,
-        roomId,
-        senderId
-      });
+      this.logError('Failed to create message receipts', { messageId, roomId }, { error: error.message, senderId });
     }
   }
 
-  /**
-   * Mark message as read for a specific user
-   */
   async markAsRead(messageId: string, userId: string): Promise<boolean> {
+    this.action = 'MARK_MESSAGE_READ';
     try {
       const result = await this._client.message_receipts.updateMany({
         where: {
@@ -111,25 +100,17 @@ export class MessageReceiptsService {
       });
 
       const updated = result.count > 0;
-      if (updated) {
-        this._logger.debug('Marked message as read', { messageId, userId });
-      }
+      if (updated) this.logDebug('Marked message as read', { messageId, userId }, {});
 
       return updated;
     } catch (error: any) {
-      this._logger.error('Failed to mark message as read', {
-        error: error.message,
-        messageId,
-        userId
-      });
+      this.logError('Failed to mark message as read', { messageId, userId }, { error: error.message });
       return false;
     }
   }
 
-  /**
-   * Get receipt information for a specific message
-   */
   async getMessageReceipts(messageId: string): Promise<MessageReceiptInfo[]> {
+    this.action = 'GET_MESSAGE_RECEIPTS';
     try {
       const receipts = await this._client.message_receipts.findMany({
         where: { message_id: messageId },
@@ -153,18 +134,13 @@ export class MessageReceiptsService {
         recipient: receipt.recipient,
       }));
     } catch (error: any) {
-      this._logger.error('Failed to get message receipts', {
-        error: error.message,
-        messageId
-      });
+      this.logError('Failed to get message receipts', { messageId }, { error: error.message });
       return [];
     }
   }
 
-  /**
-   * Get read status summary for multiple messages
-   */
   async getMessagesWithReceipts(messageIds: string[]): Promise<Map<string, any>> {
+    this.action = 'GET_MESSAGES_WITH_RECEIPTS';
     try {
       const receipts = await this._client.message_receipts.findMany({
         where: { message_id: { in: messageIds } },
@@ -192,18 +168,13 @@ export class MessageReceiptsService {
 
       return receiptMap;
     } catch (error: any) {
-      this._logger.error('Failed to get messages with receipts', {
-        error: error.message,
-        messageIds
-      });
+      this.logError('Failed to get messages with receipts', { messageIds }, { error: error.message });
       return new Map();
     }
   }
 
-  /**
-   * Mark multiple messages as read for a user (bulk operation)
-   */
   async markMultipleAsRead(messageIds: string[], userId: string): Promise<number> {
+    this.action = 'MARK_MULTIPLE_READ';
     try {
       const result = await this._client.message_receipts.updateMany({
         where: {
@@ -216,26 +187,17 @@ export class MessageReceiptsService {
         },
       });
 
-      this._logger.debug('Bulk marked messages as read', { 
-        messageCount: result.count, 
-        userId 
-      });
+      this.logDebug('Bulk marked messages as read', { userId }, { messageCount: result.count });
 
       return result.count;
     } catch (error: any) {
-      this._logger.error('Failed to bulk mark messages as read', {
-        error: error.message,
-        messageIds,
-        userId
-      });
+      this.logError('Failed to bulk mark messages as read', { userId }, { error: error.message, messageIds });
       return 0;
     }
   }
 
-  /**
-   * Get unread messages for a user
-   */
   async getUnreadMessages(userId: string, roomId?: string): Promise<string[]> {
+    this.action = 'GET_UNREAD_MESSAGES';
     try {
       const whereCondition: any = {
         recipient_id: userId,
@@ -262,11 +224,7 @@ export class MessageReceiptsService {
 
       return unreadReceipts.map(receipt => receipt.message_id);
     } catch (error: any) {
-      this._logger.error('Failed to get unread messages', {
-        error: error.message,
-        userId,
-        roomId
-      });
+      this.logError('Failed to get unread messages', { userId, roomId }, { error: error.message });
       return [];
     }
   }

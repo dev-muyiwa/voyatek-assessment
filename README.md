@@ -143,14 +143,14 @@ const socket = io('http://localhost:3000', {
   - Leaves the room and updates presence.
 
 ### Server → Client events
-- `joined_room` — `{ roomId, presence, unreadCount, timestamp }`
-- `receive_message` — `{ id, room_id, content, timestamp, sender: { ... } }`
-- `typing` — `{ userId, isTyping, timestamp }`
-- `user_joined` — `{ userId, status, timestamp }`
-- `user_left` — `{ userId, timestamp }`
-- `user_status` — `{ userId, status: 'online'|'offline', lastSeen, timestamp }`
-- `message_receipt` — `{ messageId, recipientId, status: 'read', timestamp }`
-- `messages_read` — `{ recipientId, messageCount, timestamp }`
+- `joined_room` — `{ room_id, presence: [{ user_id, status, last_seen }], unread_count, timestamp }`
+- `receive_message` — `{ id, room_id, content, timestamp, sender: { id, username, first_name, last_name } }`
+- `typing` — `{ user_id, username?, first_name?, last_name?, is_typing, timestamp }`
+- `user_joined` — `{ user_id, username?, first_name?, last_name?, status, timestamp }`
+- `user_left` — `{ user_id, username?, first_name?, last_name?, timestamp }`
+- `user_status` — `{ user_id, username?, first_name?, last_name?, status: 'online'|'offline', last_seen, timestamp }`
+- `message_receipt` — `{ message_id, recipient_id, username?, first_name?, last_name?, status: 'read', timestamp }`
+- `messages_read` — `{ recipient_id, username?, first_name?, last_name?, message_count, timestamp }`
 - Errors: `join_room_error`, `message_error`
 
 ### Example client usage
@@ -231,8 +231,6 @@ function leaveRoom() {
   socket.emit('leave_room', { roomId });
 }
 ```
-
-For a full, copy-pasteable reference of payloads and flows, see `MESSAGING_API.md`.
 
 ---
 

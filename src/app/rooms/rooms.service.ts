@@ -164,6 +164,11 @@ export class RoomsService extends BaseService {
 
     await this.verifyRoomMembership(record.id, dto.roomId);
 
+    if(!room.is_private) {
+      this.logError('Cannot invite to a public room', { roomId: dto.roomId });
+      throw new Exception('Cannot invite to a public room. Join via the ID.', Exception.BAD_REQUEST);
+    }
+
     const newInvitee = await this._client.users.findUnique({
       where: { id: dto.inviteeId, deleted_at: null },
       select: { id: true },

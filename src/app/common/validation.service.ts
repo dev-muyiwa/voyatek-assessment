@@ -1,4 +1,5 @@
 import { injectable } from 'inversify';
+import { isUUID } from 'class-validator';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -91,17 +92,8 @@ export class ValidationService {
   validateRoomId(roomId: string): ValidationResult {
     const errors: string[] = [];
 
-    if (!roomId || typeof roomId !== 'string') {
-      errors.push('Room ID is required and must be a string');
-    } else {
-      // Check if it's a valid UUID format (7 characters for this system)
-      if (roomId.length !== 7) {
-        errors.push('Room ID must be 7 characters long');
-      }
-      
-      if (!/^[a-zA-Z0-9]+$/.test(roomId)) {
-        errors.push('Room ID must contain only alphanumeric characters');
-      }
+    if (!roomId || !isUUID(roomId)) {
+      errors.push('Room ID must be a valid UUID');
     }
 
     return {
@@ -110,32 +102,20 @@ export class ValidationService {
     };
   }
 
-  /**
-   * Sanitize message content
-   */
   sanitizeMessage(content: string): string {
-    if (!content || typeof content !== 'string') {
+    if (!content) {
       return '';
     }
 
     return content
-      // Remove null characters
       .replace(/\0/g, '')
-      // Normalize whitespace
       .replace(/\s+/g, ' ')
-      // Trim leading/trailing whitespace
       .trim()
-      // Remove excessive newlines
       .replace(/\n{3,}/g, '\n\n')
-      // Remove potential script injections (basic)
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      // Remove HTML tags (basic sanitization)
       .replace(/<[^>]*>/g, '');
   }
 
-  /**
-   * Check for excessive consecutive characters
-   */
   private hasExcessiveConsecutiveChars(message: string, maxConsecutive: number): boolean {
     let consecutiveCount = 1;
     let previousChar = '';
@@ -155,9 +135,6 @@ export class ValidationService {
     return false;
   }
 
-  /**
-   * Find blocked words in message
-   */
   private findBlockedWords(message: string, blockedWords: string[]): string[] {
     const lowerMessage = message.toLowerCase();
     return blockedWords.filter(word => 
@@ -165,11 +142,7 @@ export class ValidationService {
     );
   }
 
-  /**
-   * Basic spam detection
-   */
   private isLikelySpam(message: string): boolean {
-    // Check for excessive repetition
     const words = message.toLowerCase().split(/\s+/);
     const wordCount = new Map<string, number>();
     
@@ -177,31 +150,21 @@ export class ValidationService {
       wordCount.set(word, (wordCount.get(word) || 0) + 1);
     }
 
-    // If any word appears more than 5 times in a short message, it's likely spam
     for (const [, count] of wordCount) {
       if (count > 5 && words.length < 50) {
         return true;
       }
     }
 
-    // Check for excessive capitalization
     const capitalRatio = (message.match(/[A-Z]/g) || []).length / message.length;
     if (capitalRatio > 0.7 && message.length > 10) {
       return true;
     }
 
-    // Check for excessive punctuation
     const punctuationRatio = (message.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/g) || []).length / message.length;
-    if (punctuationRatio > 0.3 && message.length > 10) {
-      return true;
-    }
-
-    return false;
+    return punctuationRatio > 0.3 && message.length > 10;
   }
 
-  /**
-   * Validate typing event data
-   */
   validateTypingData(data: any): ValidationResult {
     const errors: string[] = [];
 
@@ -210,13 +173,10 @@ export class ValidationService {
       return { isValid: false, errors };
     }
 
-    // Validate roomId
     const roomIdResult = this.validateRoomId(data.roomId);
     if (!roomIdResult.isValid) {
       errors.push(...roomIdResult.errors.map(e => `Room ID: ${e}`));
     }
-
-    // Validate isTyping
     if (typeof data.isTyping !== 'boolean') {
       errors.push('isTyping must be a boolean value');
     }
@@ -227,9 +187,6 @@ export class ValidationService {
     };
   }
 
-  /**
-   * Validate join room data
-   */
   validateJoinRoomData(data: any): ValidationResult {
     const errors: string[] = [];
 
@@ -238,7 +195,6 @@ export class ValidationService {
       return { isValid: false, errors };
     }
 
-    // Validate roomId
     const roomIdResult = this.validateRoomId(data.roomId);
     if (!roomIdResult.isValid) {
       errors.push(...roomIdResult.errors);

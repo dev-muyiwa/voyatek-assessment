@@ -7,6 +7,7 @@ import { PresenceService } from '../users/presence.service';
 import { RateLimiterService } from '../users/rate-limiter.service';
 import { ValidationService } from '../common/validation.service';
 import { MessageReceiptsService } from '../messages/message-receipts.service';
+import { UserService } from '../users/user.service';
 import { inject, injectable } from 'inversify';
 import { LIB_TYPES, SERVICE_TYPES } from '../../di/types';
 
@@ -40,22 +41,24 @@ export class SocketService {
     @inject(SERVICE_TYPES.RateLimiterService) private readonly rateLimiterService: RateLimiterService,
     @inject(SERVICE_TYPES.ValidationService) private readonly validationService: ValidationService,
     @inject(SERVICE_TYPES.MessageReceiptsService) private readonly messageReceiptsService: MessageReceiptsService,
+    @inject(SERVICE_TYPES.UserService) private readonly userService: UserService,
   ) {
     this.client = this.db.connection;
   }
 
-  /**
-   * Initialize socket server with authentication and event handlers
-   */
+  private async getUserPublic(userId: string): Promise<{ id: string; username: string; first_name: string; last_name: string } | null> {
+    return await this.userService.findOne(
+      { id: userId },
+      { id: true, username: true, first_name: true, last_name: true }
+    ) as any;
+  }
+
   public init(io: Server, secret: string): void {
     this.io = io;
     this.setupAuthenticationMiddleware(secret);
     this.setupConnectionHandler(secret);
   }
 
-  /**
-   * Socket authentication middleware
-   */
   private async authenticateSocket(socket: Socket, secret: string): Promise<{ id: string; email: string } | null> {
     try {
       const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
@@ -88,9 +91,6 @@ export class SocketService {
     }
   }
 
-  /**
-   * Verify user is a member of the room
-   */
   private async verifyRoomMembership(userId: string, roomId: string): Promise<boolean> {
     const membership = await this.client.room_members.findFirst({
             where: {
@@ -103,9 +103,6 @@ export class SocketService {
     return !!membership;
   }
 
-  /**
-   * Setup authentication middleware for socket connections
-   */
   private setupAuthenticationMiddleware(secret: string): void {
     this.io.use(async (socket, next) => {
       const user = await this.authenticateSocket(socket, secret);
@@ -120,9 +117,6 @@ export class SocketService {
     });
   }
 
-  /**
-   * Setup main connection handler and event listeners
-   */
   private setupConnectionHandler(secret: string): void {
     this.io.on('connection', async (socket: Socket) => {
       const user = socket.data.user;
@@ -132,10 +126,8 @@ export class SocketService {
       await this.presenceService.setUserOnline(user.id, socket.id);
       
       // Start heartbeat for presence
-      const heartbeat = this.presenceService.startHeartbeat(user.id);
-      socket.data.heartbeat = heartbeat;
+      socket.data.heartbeat = this.presenceService.startHeartbeat(user.id);
 
-      // Setup event handlers
       this.setupJoinRoomHandler(socket, user);
       this.setupSendMessageHandler(socket, user);
       this.setupTypingHandler(socket, user);
@@ -145,13 +137,9 @@ export class SocketService {
     });
   }
 
-  /**
-   * Setup join room event handler
-   */
   private setupJoinRoomHandler(socket: Socket, user: { id: string; email: string }): void {
     socket.on('join_room', async (data: { roomId: string }) => {
       try {
-        // Rate limiting for join room requests
         const rateLimitResult = await this.rateLimiterService.checkRateLimit(
           user.id,
           RateLimiterService.CONFIGS.JOIN_ROOM_RATE_LIMIT
@@ -165,7 +153,6 @@ export class SocketService {
           return;
         }
 
-        // Validate join room data
         const validationResult = this.validationService.validateJoinRoomData(data);
         if (!validationResult.isValid) {
           socket.emit('join_room_error', { 
@@ -177,7 +164,6 @@ export class SocketService {
 
         const { roomId } = data;
 
-        // Check if room exists and get room info
         const room = await this.client.rooms.findFirst({
           where: { id: roomId, deleted_at: null },
           select: { id: true, is_private: true, name: true }
@@ -188,7 +174,6 @@ export class SocketService {
           return;
         }
 
-        // Verify user is a member of the room
         const isMember = await this.verifyRoomMembership(user.id, roomId);
         if (!isMember) {
           this.logger.debug('User attempted to join room without membership', { 
@@ -209,37 +194,37 @@ export class SocketService {
         // Join the room
         socket.join(roomId);
         socket.data.currentRoomId = roomId;
-        
-        // Add user to room presence tracking
+
         await this.presenceService.addUserToRoom(roomId, user.id);
-        
-        // Get user's current presence
+
         const userPresence = await this.presenceService.getUserPresence(user.id);
-        
-        // Notify other users in the room about user joining
+        const userPublic = await this.getUserPublic(user.id);
+
         socket.to(roomId).emit('user_joined', { 
-          userId: user.id, 
+          user_id: user.id,
+          username: userPublic?.username,
+          first_name: userPublic?.first_name,
+          last_name: userPublic?.last_name,
           status: userPresence?.status || 'online',
           timestamp: new Date().toISOString()
         });
 
-        // Broadcast user status to room
         socket.to(roomId).emit('user_status', {
-          userId: user.id,
+          user_id: user.id,
+          username: userPublic?.username,
+          first_name: userPublic?.first_name,
+          last_name: userPublic?.last_name,
           status: 'online',
-          lastSeen: userPresence?.lastSeen || new Date().toISOString(),
+          last_seen: userPresence?.lastSeen || new Date().toISOString(),
           timestamp: new Date().toISOString()
         });
 
-        // Get current room presence for the joining user
         const roomPresence = await this.presenceService.getRoomPresence(roomId);
 
-        // Auto-mark unread messages as read when user joins room
         const unreadMessages = await this.messageReceiptsService.getUnreadMessages(user.id, roomId);
         if (unreadMessages.length > 0) {
           const readCount = await this.messageReceiptsService.markMultipleAsRead(unreadMessages, user.id);
           if (readCount > 0) {
-            // Notify about auto-read
             this.io.to(roomId).emit('messages_read', {
               recipientId: user.id,
               messageCount: readCount,
@@ -247,13 +232,16 @@ export class SocketService {
             });
           }
         }
-        
-        // Confirm successful join to the user with current room presence
+
         socket.emit('joined_room', { 
-          roomId,
+          room_id: roomId,
           timestamp: new Date().toISOString(),
-          presence: roomPresence,
-          unreadCount: unreadMessages.length
+          presence: roomPresence.map(p => ({
+            user_id: p.userId,
+            status: p.status,
+            last_seen: p.lastSeen,
+          })),
+          unread_count: unreadMessages.length
         });
 
         this.logger.debug('User joined room', { userId: user.id, roomId });
@@ -264,13 +252,9 @@ export class SocketService {
     });
   }
 
-  /**
-   * Setup send message event handler
-   */
   private setupSendMessageHandler(socket: Socket, user: { id: string; email: string }): void {
     socket.on('send_message', async (data: { roomId: string; content: string }) => {
       try {
-                // Rate limiting for message sending
         const rateLimitResult = await this.rateLimiterService.checkRateLimit(
           user.id,
           RateLimiterService.CONFIGS.MESSAGE_RATE_LIMIT
@@ -336,7 +320,6 @@ export class SocketService {
           return;
         }
 
-        // Create the message in the database
         const message = await this.client.messages.create({
           data: { 
             room_id: roomId, 
@@ -362,10 +345,17 @@ export class SocketService {
         // Create delivery receipts for all room members (except sender)
         await this.messageReceiptsService.createDeliveryReceipts(message.id, roomId, user.id);
 
-        // Broadcast message to all room members
         this.io.to(roomId).emit('receive_message', {
-          ...message,
+          id: message.id,
+          room_id: message.room_id,
+          content: message.content,
           timestamp: message.created_at.toISOString(),
+          sender: {
+            id: message.sender.id,
+            username: message.sender.username,
+            first_name: message.sender.first_name,
+            last_name: message.sender.last_name,
+          }
         });
 
         this.logger.debug('Message sent with receipts', { 
@@ -381,24 +371,18 @@ export class SocketService {
     });
   }
 
-  /**
-   * Setup typing event handler
-   */
   private setupTypingHandler(socket: Socket, user: { id: string; email: string }): void {
     socket.on('typing', async (data: { roomId: string; isTyping: boolean }) => {
       try {
-        // Rate limiting for typing indicators
         const rateLimitResult = await this.rateLimiterService.checkRateLimit(
           user.id,
           RateLimiterService.CONFIGS.TYPING_RATE_LIMIT
         );
 
         if (!rateLimitResult.allowed) {
-          // Silently ignore excessive typing requests
           return;
         }
 
-        // Validate typing data
         const validationResult = this.validationService.validateTypingData(data);
         if (!validationResult.isValid) {
           this.logger.debug('Invalid typing data', { 
@@ -411,15 +395,17 @@ export class SocketService {
 
         const { roomId, isTyping } = data;
 
-        // Check if user is currently in the room
         if (socket.data.currentRoomId !== roomId) {
           return;
         }
 
-        // Broadcast typing indicator to other room members
+        const userPublic = await this.getUserPublic(user.id);
         socket.to(roomId).emit('typing', { 
-          userId: user.id, 
-          isTyping: !!isTyping,
+          user_id: user.id,
+          username: userPublic?.username,
+          first_name: userPublic?.first_name,
+          last_name: userPublic?.last_name,
+          is_typing: isTyping,
           timestamp: new Date().toISOString()
         });
       } catch (e: any) {
@@ -428,12 +414,8 @@ export class SocketService {
     });
   }
 
-  /**
-   * Setup message receipt event handlers
-   */
   private setupMessageReceiptHandlers(socket: Socket, user: { id: string; email: string }): void {
 
-    // Mark message as read
     socket.on('message_read', async (data: { messageId: string; roomId: string }) => {
       try {
         const { messageId, roomId } = data || {};
@@ -442,7 +424,6 @@ export class SocketService {
           return;
         }
 
-        // Verify user is in the room
         if (socket.data.currentRoomId !== roomId) {
           return;
         }
@@ -452,9 +433,13 @@ export class SocketService {
         
         if (updated) {
           // Notify the sender that the message was read
+          const userPublic = await this.getUserPublic(user.id);
           this.io.to(roomId).emit('message_receipt', {
-            messageId,
-            recipientId: user.id,
+            message_id: messageId,
+            recipient_id: user.id,
+            username: userPublic?.username,
+            first_name: userPublic?.first_name,
+            last_name: userPublic?.last_name,
             status: 'read',
             timestamp: new Date().toISOString()
           });
@@ -464,9 +449,6 @@ export class SocketService {
       }
     });
 
-    // (removed) delivered receipts are handled by DB defaults; we only track read status now
-
-    // Bulk mark messages as read
     socket.on('mark_messages_read', async (data: { messageIds: string[]; roomId: string }) => {
       try {
         const { messageIds, roomId } = data || {};
@@ -480,14 +462,17 @@ export class SocketService {
           return;
         }
 
-        // Bulk mark as read
         const updatedCount = await this.messageReceiptsService.markMultipleAsRead(messageIds, user.id);
         
         if (updatedCount > 0) {
           // Notify about bulk read
+          const userPublic = await this.getUserPublic(user.id);
           this.io.to(roomId).emit('messages_read', {
-            recipientId: user.id,
-            messageCount: updatedCount,
+            recipient_id: user.id,
+            username: userPublic?.username,
+            first_name: userPublic?.first_name,
+            last_name: userPublic?.last_name,
+            message_count: updatedCount,
             timestamp: new Date().toISOString()
           });
         }
@@ -497,9 +482,6 @@ export class SocketService {
     });
   }
 
-  /**
-   * Setup leave room event handler
-   */
   private setupLeaveRoomHandler(socket: Socket, user: { id: string; email: string }): void {
     socket.on('leave_room', async (data: { roomId: string }) => {
       try {
@@ -514,16 +496,17 @@ export class SocketService {
           socket.data.currentRoomId = null;
         }
 
-        // Remove user from room presence tracking
         await this.presenceService.removeUserFromRoom(roomId, user.id);
 
-        // Notify other users in the room
+        const userPublic = await this.getUserPublic(user.id);
         socket.to(roomId).emit('user_left', { 
-          userId: user.id, 
+          user_id: user.id,
+          username: userPublic?.username,
+          first_name: userPublic?.first_name,
+          last_name: userPublic?.last_name,
           timestamp: new Date().toISOString()
         });
 
-        // Broadcast user status change to room
         socket.to(roomId).emit('user_status', {
           userId: user.id,
           status: 'offline',
@@ -543,33 +526,30 @@ export class SocketService {
     });
   }
 
-  /**
-   * Setup disconnect event handler
-   */
   private setupDisconnectHandler(socket: Socket, user: { id: string; email: string }): void {
     socket.on('disconnect', async () => {
       const currentRoomId = socket.data.currentRoomId;
-      
-      // Clear heartbeat
+
       if (socket.data.heartbeat) {
         clearInterval(socket.data.heartbeat);
       }
-      
-      // Handle user disconnect in presence service
+
       await this.presenceService.handleUserDisconnect(user.id, currentRoomId);
       
       if (currentRoomId) {
-        // Notify other users in the room
+        const userPublic = await this.getUserPublic(user.id);
         socket.to(currentRoomId).emit('user_left', { 
-          userId: user.id, 
+          user_id: user.id,
+          username: userPublic?.username,
+          first_name: userPublic?.first_name,
+          last_name: userPublic?.last_name,
           timestamp: new Date().toISOString()
         });
 
-        // Broadcast user status change to room
         socket.to(currentRoomId).emit('user_status', {
-          userId: user.id,
+          user_id: user.id,
           status: 'offline',
-          lastSeen: new Date().toISOString(),
+          last_seen: new Date().toISOString(),
           timestamp: new Date().toISOString()
         });
       }
