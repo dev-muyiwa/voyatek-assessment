@@ -1,97 +1,67 @@
-/**
- * Base row type for mysql tables
- */
-export interface Model {
-  /**
-   * ID of the row
-   */
-  id: string;
-  /**
-   * date the row was created
-   */
-  created_at: Date;
-  /**
-   * date the row was updated
-   */
-  updated_at: Date | null;
-  /**
-   * date the row was deleted
-   */
-  deleted_at: Date | null;
-}
+import { PrismaClient } from '@prisma/client';
 
-export type PrismaPaginationOptions<Where, OrderBy, Select, Include> = {
+type PaginateOptions<
+  TWhere,
+  TSelect,
+  TOrderBy
+> = {
   page?: number;
-  limit?: number;
-  where?: Where;
-  orderBy?: OrderBy;
-  select?: Select;
-  include?: Include;
+  pageSize?: number;
+  where?: TWhere;
+  select?: TSelect;
+  orderBy?: TOrderBy;
 };
 
-export type PrismaFindManyArgs<Where, OrderBy, Select, Include> = {
-  where?: Where;
-  orderBy?: OrderBy;
-  select?: Select;
-  include?: Include;
-  skip?: number;
-  take?: number;
-};
-
-export type PrismaCountArgs<Where> = {
-  where?: Where;
-};
-
-export class Pagination<T> {
-  docs: T[];
+type PaginatedResult<T> = {
+  data: T[];
   total: number;
+  page: number;
+  pageSize: number;
   totalPages: number;
-  current: number;
-  prev: number | null;
-  next: number | null;
+};
 
-  constructor(
-    docs: T[],
-    total: number,
-    current: number,
-    limit: number,
-  ) {
-    this.docs = docs;
-    this.total = total;
-    this.totalPages = Math.ceil(total / limit);
-    this.current = Number(current);
-    this.prev = Number(current) > 1 ? Number(current) - 1 : null;
-    this.next = Number(current) < this.totalPages ? Number(current) + 1 : null;
+export class PaginationService {
+  constructor(private readonly prisma: PrismaClient) {
   }
 
-  public static async createPaginatedResponse<
-    T,
-    Where = unknown,
-    OrderBy = unknown,
-    Select = unknown,
-    Include = unknown
+  async paginate<
+    TModel extends keyof PrismaClient,
+    TDelegate = PrismaClient[TModel],
+    TResult = TDelegate extends { findMany(args: infer A): Promise<infer R> }
+      ? R
+      : never,
+    TArgs = TDelegate extends { findMany(args: infer A): any } ? A : never
   >(
-    delegate: {
-      findMany: (args: PrismaFindManyArgs<Where, OrderBy, Select, Include>) => Promise<T[]>;
-      count: (args: PrismaCountArgs<Where>) => Promise<number>;
-    },
-    options: PrismaPaginationOptions<Where, OrderBy, Select, Include> = {},
-  ): Promise<Pagination<T>> {
-    const page: number = options.page ?? 1;
-    const limit: number = options.limit ?? 10;
-    const skip = (page - 1) * limit;
+    model: TModel,
+    options: PaginateOptions<
+      TArgs extends { where?: infer W } ? W : never,
+      TArgs extends { select?: infer S } ? S : never,
+      TArgs extends { orderBy?: infer O } ? O : never
+    >
+  ): Promise<PaginatedResult<TResult>> {
+    const { page = 1, pageSize = 10, where, select, orderBy } = options;
 
-    const where: Where | undefined = options.where;
-    const orderBy: OrderBy | undefined = options.orderBy;
-    const select: Select | undefined = options.select;
-    const include: Include | undefined = options.include;
+    const skip = (page - 1) * pageSize;
 
-    const [docs, total] = await Promise.all([
-      delegate.findMany({ where, orderBy, select, include, skip, take: limit }),
+    const delegate = this.prisma[model] as any;
+
+    const [data, total] = await Promise.all([
+      delegate.findMany({
+        where,
+        select,
+        orderBy,
+        skip,
+        take: pageSize,
+      }),
       delegate.count({ where }),
     ]);
 
-    return new Pagination<T>(docs, total, page, limit);
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 }
-

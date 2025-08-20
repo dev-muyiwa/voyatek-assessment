@@ -17,10 +17,11 @@ FROM node:22-slim as production
 WORKDIR /usr/src/app
 
 COPY --from=build /usr/src/app/dist ./dist
-
+COPY --from=build /usr/src/app/prisma ./prisma
 COPY --from=build /usr/src/app/package*.json ./
 
-RUN npm install --omit=dev
+# Install production deps and ensure Prisma CLI is available at runtime for migrate deploy
+RUN npm install --omit=dev && npm install prisma --no-save
 
 EXPOSE 3000
 

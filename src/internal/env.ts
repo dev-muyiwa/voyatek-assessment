@@ -30,7 +30,7 @@ export class BasicConfig {
   api_version: string = 'v1';
 
   @IsString()
-  @IsIn(['dev', 'staging'], { message: 'Invalid node environment' })
+  @IsIn(['dev', 'staging', 'test'], { message: 'Invalid node environment' })
   node_env: string = 'dev';
 
   @IsNumber({}, { message: 'Port must be a number' })

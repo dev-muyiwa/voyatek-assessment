@@ -1,31 +1,54 @@
 version: '3.8'
 
 services:
-  redis_staging:
-    image: redis
-    container_name: redis_staging
-    restart: always
+  db:
+    image: mysql:9.4.0
+    container_name: voyatek_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_DATABASE: ${DATABASE_NAME}
     ports:
-      - "6378:${REDIS_PORT}"
+      - "${DATABASE_PORT}:3306"
     volumes:
-      - redis_staging_data:/data
-    
-    env_file:
-      - .env
-    command: ["redis-server", "--port", "${REDIS_PORT}", "--requirepass", "${REDIS_PASSWORD}"]
+      - db_data:/var/lib/mysql
 
-  redis_production:
-    image: redis
-    container_name: redis_production
-    restart: always
+  redis:
+    image: redis:7
+    container_name: voyatek_redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     ports:
-      - "6380:${REDIS_PORT}"
+      - "${REDIS_PORT}:6379"
     volumes:
-      - redis_production_data:/data
+      - redis_data:/data
+
+  app:
+    build: .
+    container_name: voyatek_app
+    depends_on:
+      - db
+      - redis
     env_file:
       - .env
-    command: ["redis-server", "--port", "${REDIS_PORT}", "--requirepass", "${REDIS_PASSWORD}"]
+    environment:
+      PORT: 3000
+      # Prisma DATABASE_URL used by Prisma Client inside the app, built from user's .env vars
+      DATABASE_URL: mysql://${DATABASE_USER}:${DATABASE_PASSWORD}@db:3306/${DATABASE_NAME}
+      # Map our existing env.ts expectations to container hosts
+      DATABASE_HOST: db
+      DATABASE_PORT: 3306
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "3000:3000"
+    command: sh -c "npx prisma migrate deploy && node dist/index.js"
 
 volumes:
-  redis_staging_data:
-  redis_production_data:
+  db_data:
+  redis_data:

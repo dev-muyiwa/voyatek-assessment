@@ -6,7 +6,7 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["queryCompiler", "driverAdapters"]
+  previewFeatures = ["queryCompiler", "driverAdapters", "relationJoins"]
 }
 
 datasource db {
@@ -28,7 +28,6 @@ model users {
   deleted_at DateTime?
 
   //   relations
-  rooms            rooms[]
   room_members     room_members[]
   messages         messages[]
   message_receipts message_receipts[]
@@ -38,7 +37,7 @@ model rooms {
   id          String  @id @default(uuid(7))
   name        String
   description String?
-  owner_id    String
+  is_private  Boolean @default(false)
 
   //   timestamps
   created_at DateTime  @default(now())
@@ -46,15 +45,20 @@ model rooms {
   deleted_at DateTime?
 
   //   relations
-  owner        users          @relation(fields: [owner_id], references: [id])
   room_members room_members[]
   messages     messages[]
 }
 
+enum room_member_role {
+  owner
+  member
+}
+
 model room_members {
-  id        String @id @default(uuid(7))
+  id        String           @id @default(uuid(7))
   member_id String
   room_id   String
+  role      room_member_role @default(member)
 
   //   timestamps
   created_at DateTime  @default(now())
@@ -87,10 +91,10 @@ model messages {
 }
 
 model message_receipts {
-  id           Int @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   message_id   String
   recipient_id String
-  delivered_at DateTime?
+  delivered_at DateTime  @default(now())
   read_at      DateTime?
 
   //   timestamps
