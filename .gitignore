@@ -58,3 +58,4 @@ backend-v2.code-workspace
 .vscode/settings.json
 
 /generated/prisma
+tsconfig.tsbuildinfo

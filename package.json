@@ -26,7 +26,6 @@
     "express": "^4.21.1",
     "handlebars": "^4.7.8",
     "helmet": "^8.0.0",
-    "html-pdf": "^3.0.1",
     "inversify": "^6.1.6",
     "inversify-express-utils": "^6.4.8",
     "ioredis": "^5.4.1",

@@ -10,7 +10,7 @@ import { MailClient } from '../config/mail';
 import { UserService } from '../app/users/user.service';
 import { PresenceService } from '../app/users/presence.service';
 import { RateLimiterService } from '../app/users/rate-limiter.service';
-import { ValidationService } from '../app/common/validation.service';
+import { ValidationService } from '../app/realtime/services/validation.service';
 import { MessageReceiptsService } from '../app/messages/message-receipts.service';
 import { SocketService } from '../app/realtime/socket';
 import { AuthService } from '../app/auth/services/auth.service';

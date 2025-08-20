@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { RedisClient } from '../../config/redis';
 import { PresenceService } from '../users/presence.service';
 import { RateLimiterService } from '../users/rate-limiter.service';
-import { ValidationService } from '../common/validation.service';
+import { ValidationService } from './services/validation.service';
 import { MessageReceiptsService } from '../messages/message-receipts.service';
 import { UserService } from '../users/user.service';
 import { inject, injectable } from 'inversify';

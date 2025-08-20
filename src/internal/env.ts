@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import mapKeys from 'lodash/mapKeys';
 import { IsIn, IsNumber, IsString, validateSync, ValidationError } from 'class-validator';
-import { plainToInstance } from 'class-transformer';
+import { plainToInstance, Type } from 'class-transformer';
 
 export class DataValidationError extends Error {
   messages: string[];
@@ -34,6 +34,7 @@ export class BasicConfig {
   node_env: string = 'dev';
 
   @IsNumber({}, { message: 'Port must be a number' })
+  @Type(() => Number)
   port: number = 4000;
 
   constructor(config?: Partial<BasicConfig>) {

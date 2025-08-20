@@ -26,35 +26,16 @@ export class MailClient {
       // if (!(this.transporter instanceof SESClient)) {
       const info = await this.transporter.sendMail({
         from: {
-          name: 'Schoolinka',
-          address: 'no-reply@schoolinka.com',
+          name: 'Voyatek',
+          address: 'no-reply@voyatek.com',
         },
         to,
         subject,
         html: html,
-        replyTo: 'no-reply@schoolinka.com',
+        replyTo: 'no-reply@voyatek.com',
       });
 
       this._logger.info(`sent using nodemailer: ${info.messageId}`);
-      // } else {
-      //   const params = {
-      //     Destination: {
-      //       ToAddresses: [to]
-      //     },
-      //     Message: {
-      //       Body: {
-      //         Html: { Data: html }
-      //       },
-      //       Subject: { Data: subject }
-      //     },
-      //     Source: 'Schoolinka <no-reply@schoolinka.com>'
-      //   };
-      //
-      //   const command = new SendEmailCommand(params);
-      //   const data = await this.transporter.send(command);
-      //
-      //   this._logger.info(`sent using aws ses: ${data.MessageId}`);
-      // }
     } catch (err) {
       this._logger.error('error sending email', { error: err });
       throw new Error('error sending email');
@@ -70,13 +51,13 @@ export class MailClient {
     try {
       const info = await this.transporter.sendMail({
         from: {
-          name: 'Schoolinka',
-          address: 'no-reply@schoolinka.com',
+          name: 'Voyatek',
+          address: 'no-reply@voyatek.com',
         },
         to,
         subject,
         html: html,
-        replyTo: 'no-reply@schoolinka.com',
+        replyTo: 'no-reply@voyatek.com',
         attachments: attachments.map((attachment) => {
           return {
             filename: attachment.filename,

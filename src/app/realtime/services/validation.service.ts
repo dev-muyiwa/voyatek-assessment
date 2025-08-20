@@ -26,48 +26,37 @@ export class ValidationService {
     maxConsecutiveChars: 10
   };
 
-  /**
-   * Validate message content
-   */
   validateMessage(content: string, options?: MessageValidationOptions): ValidationResult {
     const opts = { ...this.DEFAULT_MESSAGE_OPTIONS, ...options };
     const errors: string[] = [];
 
-    // Check if content exists
     if (content === null || content === undefined) {
       errors.push('Message content is required');
       return { isValid: false, errors };
     }
 
-    // Convert to string if not already
     const message = String(content);
 
-    // Check for empty or whitespace-only content
     if (!opts.allowOnlyWhitespace && message.trim().length === 0) {
       errors.push('Message cannot be empty or contain only whitespace');
     }
 
-    // Check minimum length
     if (message.trim().length < opts.minLength) {
       errors.push(`Message must be at least ${opts.minLength} character(s) long`);
     }
 
-    // Check maximum length
     if (message.length > opts.maxLength) {
       errors.push(`Message cannot exceed ${opts.maxLength} characters`);
     }
 
-    // Check for empty lines if not allowed
     if (!opts.allowEmptyLines && message.includes('\n\n')) {
       errors.push('Message cannot contain empty lines');
     }
 
-    // Check for excessive consecutive characters
     if (this.hasExcessiveConsecutiveChars(message, opts.maxConsecutiveChars)) {
       errors.push(`Message cannot have more than ${opts.maxConsecutiveChars} consecutive identical characters`);
     }
 
-    // Check for blocked words
     if (opts.blockedWords.length > 0) {
       const foundBlockedWords = this.findBlockedWords(message, opts.blockedWords);
       if (foundBlockedWords.length > 0) {
@@ -75,7 +64,6 @@ export class ValidationService {
       }
     }
 
-    // Check for potential spam patterns
     if (this.isLikelySpam(message)) {
       errors.push('Message appears to be spam');
     }
@@ -86,9 +74,6 @@ export class ValidationService {
     };
   }
 
-  /**
-   * Validate room ID format
-   */
   validateRoomId(roomId: string): ValidationResult {
     const errors: string[] = [];
 
@@ -206,3 +191,4 @@ export class ValidationService {
     };
   }
 }
+

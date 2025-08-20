@@ -1,6 +1,6 @@
-FROM node:22 as build
+FROM node:22 AS build
 
-LABEL authors="Schoolinka"
+LABEL authors="Moyosoreoluwa"
 
 WORKDIR /usr/src/app
 
@@ -12,9 +12,17 @@ COPY . .
 
 RUN npm run build
 
-FROM node:22-slim as production
+# Test stage
+FROM build AS test
+
+RUN npm test
+
+FROM node:22-slim AS production
 
 WORKDIR /usr/src/app
+
+# Install OpenSSL to fix Prisma warnings
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /usr/src/app/dist ./dist
 COPY --from=build /usr/src/app/prisma ./prisma

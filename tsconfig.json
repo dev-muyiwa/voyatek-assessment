@@ -8,6 +8,7 @@
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "baseUrl": "./",
+    "rootDir": "./src",
     "outDir": "./dist",
     "incremental": true,
     "strictNullChecks": true,
@@ -25,4 +26,5 @@
   },
   "typeRoots": ["./node_modules/@types"],
   "types": ["reflect-metadata", "jest", "node"],
+  "include": ["src/**/*.ts"]
 }

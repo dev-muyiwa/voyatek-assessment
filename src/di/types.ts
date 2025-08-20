@@ -4,7 +4,6 @@ export const LIB_TYPES = {
   RedisClient: Symbol.for('RedisClient'),
   JobProcessor: Symbol.for('JobProcessor'),
   MailClient: Symbol.for('MailClient'),
-  StorageProvider: Symbol.for('StorageProvider'),
 };
 
 export const EMITTER = Symbol.for('EventEmitter');
