@@ -1,0 +1,275 @@
+import { inject, injectable } from 'inversify';
+import { LIB_TYPES } from '../../di/types';
+import { Database } from '../../config/db';
+import { Logger } from '../../config/logger';
+import { PrismaClient } from '@prisma/client';
+
+export interface MessageReceiptInfo {
+  messageId: string;
+  recipientId: string;
+  read: boolean;
+  readAt?: string;
+}
+
+export interface MessageWithReceipts {
+  id: string;
+  content: string;
+  createdAt: string;
+  sender: {
+    id: string;
+    username: string;
+    first_name: string;
+    last_name: string;
+  };
+  receipts: MessageReceiptInfo[];
+  readStatus: {
+    totalRecipients: number;
+    readCount: number;
+  };
+}
+
+@injectable()
+export class MessageReceiptsService {
+  private _client: PrismaClient;
+
+  constructor(
+    @inject(LIB_TYPES.KnexDB) private readonly _db: Database,
+    @inject(LIB_TYPES.Logger) private readonly _logger: Logger,
+  ) {
+    this._client = this._db.connection;
+  }
+
+  /**
+   * Create receipts for all room members when a message is sent
+   * delivered_at is handled by DB default; we only populate recipient links
+   */
+  async createDeliveryReceipts(messageId: string, roomId: string, senderId: string): Promise<void> {
+    try {
+      // Get all room members except the sender
+      const roomMembers = await this._client.room_members.findMany({
+        where: {
+          room_id: roomId,
+          member_id: { not: senderId },
+          deleted_at: null,
+        },
+        select: { member_id: true },
+      });
+
+      if (roomMembers.length === 0) {
+        this._logger.debug('No recipients found for message receipts', { messageId, roomId });
+        return;
+      }
+
+      // Create receipt records for each recipient; DB will set delivered_at by default
+      // Extra defensive filter to ensure the sender never gets a receipt
+      const recipientIds = roomMembers
+        .map(member => member.member_id)
+        .filter(memberId => memberId !== senderId);
+
+      if (recipientIds.length === 0) {
+        this._logger.debug('No non-sender recipients for message receipts', { messageId, roomId });
+        return;
+      }
+
+      const receiptData = recipientIds.map(recipient_id => ({
+        message_id: messageId,
+        recipient_id,
+      }));
+
+      await this._client.message_receipts.createMany({
+        data: receiptData,
+        skipDuplicates: true,
+      });
+
+      this._logger.debug('Created message receipts', { 
+        messageId, 
+        recipientCount: roomMembers.length 
+      });
+    } catch (error: any) {
+      this._logger.error('Failed to create message receipts', {
+        error: error.message,
+        messageId,
+        roomId,
+        senderId
+      });
+    }
+  }
+
+  /**
+   * Mark message as read for a specific user
+   */
+  async markAsRead(messageId: string, userId: string): Promise<boolean> {
+    try {
+      const result = await this._client.message_receipts.updateMany({
+        where: {
+          message_id: messageId,
+          recipient_id: userId,
+        },
+        data: {
+          read_at: new Date(),
+        },
+      });
+
+      const updated = result.count > 0;
+      if (updated) {
+        this._logger.debug('Marked message as read', { messageId, userId });
+      }
+
+      return updated;
+    } catch (error: any) {
+      this._logger.error('Failed to mark message as read', {
+        error: error.message,
+        messageId,
+        userId
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Get receipt information for a specific message
+   */
+  async getMessageReceipts(messageId: string): Promise<MessageReceiptInfo[]> {
+    try {
+      const receipts = await this._client.message_receipts.findMany({
+        where: { message_id: messageId },
+        include: {
+          recipient: {
+            select: {
+              id: true,
+              username: true,
+              first_name: true,
+              last_name: true,
+            },
+          },
+        },
+      });
+
+      return receipts.map(receipt => ({
+        messageId: receipt.message_id,
+        recipientId: receipt.recipient_id,
+        read: !!receipt.read_at,
+        readAt: receipt.read_at?.toISOString(),
+        recipient: receipt.recipient,
+      }));
+    } catch (error: any) {
+      this._logger.error('Failed to get message receipts', {
+        error: error.message,
+        messageId
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get read status summary for multiple messages
+   */
+  async getMessagesWithReceipts(messageIds: string[]): Promise<Map<string, any>> {
+    try {
+      const receipts = await this._client.message_receipts.findMany({
+        where: { message_id: { in: messageIds } },
+        select: {
+          message_id: true,
+          read_at: true,
+        },
+      });
+
+      const receiptMap = new Map<string, any>();
+
+      messageIds.forEach(messageId => {
+        const messageReceipts = receipts.filter(r => r.message_id === messageId);
+        const totalRecipients = messageReceipts.length;
+        const readCount = messageReceipts.filter(r => r.read_at !== null).length;
+
+        receiptMap.set(messageId, {
+          totalRecipients,
+          readCount,
+          readStatus: totalRecipients > 0 ? 
+            (readCount === totalRecipients ? 'all_read' : 
+             readCount > 0 ? 'partially_read' : 'unread') : 'no_recipients',
+        });
+      });
+
+      return receiptMap;
+    } catch (error: any) {
+      this._logger.error('Failed to get messages with receipts', {
+        error: error.message,
+        messageIds
+      });
+      return new Map();
+    }
+  }
+
+  /**
+   * Mark multiple messages as read for a user (bulk operation)
+   */
+  async markMultipleAsRead(messageIds: string[], userId: string): Promise<number> {
+    try {
+      const result = await this._client.message_receipts.updateMany({
+        where: {
+          message_id: { in: messageIds },
+          recipient_id: userId,
+          read_at: null,
+        },
+        data: {
+          read_at: new Date(),
+        },
+      });
+
+      this._logger.debug('Bulk marked messages as read', { 
+        messageCount: result.count, 
+        userId 
+      });
+
+      return result.count;
+    } catch (error: any) {
+      this._logger.error('Failed to bulk mark messages as read', {
+        error: error.message,
+        messageIds,
+        userId
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Get unread messages for a user
+   */
+  async getUnreadMessages(userId: string, roomId?: string): Promise<string[]> {
+    try {
+      const whereCondition: any = {
+        recipient_id: userId,
+        read_at: null,
+      };
+
+      if (roomId) {
+        whereCondition.message = {
+          room_id: roomId,
+        };
+      }
+
+      const unreadReceipts = await this._client.message_receipts.findMany({
+        where: whereCondition,
+        select: { message_id: true },
+        ...(roomId && {
+          include: {
+            message: {
+              select: { room_id: true },
+            },
+          },
+        }),
+      });
+
+      return unreadReceipts.map(receipt => receipt.message_id);
+    } catch (error: any) {
+      this._logger.error('Failed to get unread messages', {
+        error: error.message,
+        userId,
+        roomId
+      });
+      return [];
+    }
+  }
+
+  // delivered state is implicit via DB default; no undelivered API
+}
