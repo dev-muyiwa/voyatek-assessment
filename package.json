@@ -5,7 +5,7 @@
   "description": "Backend assessment for Voyatek",
   "main": "dist/index.js",
   "scripts": {
-    "start": "npx prisma migrate deploy && node ./dist",
+    "start": "npx prisma migrate deploy && node dist/index.js",
     "start:dev": "npx prisma migrate deploy && nodemon src/index.ts",
     "watch": "tsc --watch -p ./tsconfig.json",
     "build": "tsc -p ./tsconfig.json",
