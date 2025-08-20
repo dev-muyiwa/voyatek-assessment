@@ -3,7 +3,7 @@
 TypeScript/Node.js backend with real-time messaging using Socket.IO, Prisma (MySQL), Redis, and InversifyJS. Features include authenticated room chat, presence, message read receipts, rate limiting, validation, and REST endpoints.
 
 ### API Documentation (Postman)
-Comprehensive request/response examples are available in Postman docs: [Voyatek Messaging API (Postman)](https://documenter.getpostman.com/view/41950051/2sB3BKF8mv)
+Comprehensive request/response examples are available in Postman docs: [Voyatek Messaging API (Postman)](https://documenter.getpostman.com/view/41950051/2sB3BKF8mv){:target="_blank"}
 
 ### Tech stack
 - Express + inversify-express-utils (DI, controllers)
